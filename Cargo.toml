@@ -1,0 +1,23 @@
+[package]
+name = "service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+config = "0.13.3"
+tokio = { version = "1.25.0", features = ["full"] }
+serde = { version = "1.0.152", features = ["derive"] }
+eyre = "0.6.8"
+url = "2.3.1"
+log = { version = "0.4.17", features = ["std", "serde"] }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.
+
+[dependencies.coin-shuffle-protos]
+git = "ssh://git@github.com/coin-shuffle/protos.git"
+branch = "develop"
+features = ["server"]
+
+[dependencies.coin-shuffle-contracts-bindings]
+git = "ssh://git@github.com/coin-shuffle/contracts-bindings.git"
+branch = "main"

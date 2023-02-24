@@ -1,0 +1,9 @@
+[service]
+address = "localhost:8080"
+
+[logger]
+level = "DEBUG"
+
+[database]
+in-memory = true # use in memory database
+url = "postgresql://postgres@postgres:postgres/state"
