@@ -4,48 +4,48 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-config = "0.13.3"
-tokio = { version = "1.25.0", features = ["full"] }
-serde = { version = "1.0.152", features = ["derive"] }
-eyre = "0.6.8"
-url = "2.3.1"
-log = { version = "0.4.17", features = ["std", "serde"] }
-clap = { version = "4.1.6", features = ["derive"] }
-sqlx = { version = "0.6", features = [
+config = { version = "0.13.3" }
+tokio  = { version = "1.25.0",  features = ["full"] }
+serde  = { version = "1.0.152", features = ["derive"] }
+eyre   = { version = "0.6.8" }
+url    = { version = "2.3.1" }
+log    = { version = "0.4.17", features = ["std", "serde"] }
+clap   = { version = "4.1.6",  features = ["derive"] }
+sqlx   = { version = "0.6",    features = [
      "runtime-tokio-rustls", "macros", "uuid", "postgres",
 ] }
-async-trait = "0.1.64"
-ethers-middleware = "1.0.2"
-tokio-stream = "0.1.12"
-tonic = "0.8.3"
-open-fastrlp = "0.1.4"
-thiserror = "1.0.38"
-jsonwebtoken = "8.2.0"
+async-trait       = { version = "0.1.64" }
+ethers-middleware = { version = "1.0.2" }
+tokio-stream      = { version = "0.1.12" }
+tonic             = { version = "0.8.3" }
+open-fastrlp      = { version = "0.1.4" }
+thiserror         = { version = "1.0.38" }
+jsonwebtoken      = { version = "8.2.0" }
 
 [dependencies.ethers-signers]
-git = "https://github.com/gakonst/ethers-rs.git"
+git    = "https://github.com/gakonst/ethers-rs.git"
 branch = "master"
 
 [dependencies.ethers-providers]
-git = "https://github.com/gakonst/ethers-rs.git"
+git    = "https://github.com/gakonst/ethers-rs.git"
 branch = "master"
 
 [dependencies.ethers-core]
-git = "https://github.com/gakonst/ethers-rs.git"
+git    = "https://github.com/gakonst/ethers-rs.git"
 branch = "master"
 
 [dependencies.coin-shuffle-protos]
-git = "ssh://git@github.com/coin-shuffle/protos.git"
-branch = "develop"
+git              = "ssh://git@github.com/coin-shuffle/protos.git"
+branch           = "develop"
 default-features = false
-features = ["server", "transport"]
+features         = ["server", "transport"]
 
 [dependencies.coin-shuffle-contracts-bindings]
-git = "ssh://git@github.com/coin-shuffle/contracts-bindings.git"
+git    = "ssh://git@github.com/coin-shuffle/contracts-bindings.git"
 branch = "develop"
 
 [dependencies.coin-shuffle-core]
-git = "ssh://git@github.com/coin-shuffle/core.git"
-branch = "feature/participants-management"
+git              = "ssh://git@github.com/coin-shuffle/core.git"
+branch           = "feature/participants-management"
 default-features = false
-features = ["service"]
+features         = ["service"]

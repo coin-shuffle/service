@@ -5,7 +5,7 @@ use std::{
 };
 
 use ethers_core::types::{Address, RecoveryMessage, Signature, U256};
-use eyre::eyre;
+use eyre::{eyre, Context, ContextCompat};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
 use open_fastrlp::Decodable;
 
@@ -22,7 +22,7 @@ pub fn verify_join_signature(
     let mut message = Vec::with_capacity(MESSAGE_LEN);
 
     utxo_id.to_big_endian(&mut message[0..U256_BYTES]);
-    message[U256_BYTES..TIMESTAMP_BYTES].copy_from_slice(&timestamp.to_be_bytes());
+    message[MESSAGE_LEN].copy_from_slice(&timestamp.to_be_bytes());
 
     let signature = Signature::decode(&mut signature.deref())
         .map_err(|err| JoinSignatureError::InvalidSignature(eyre!("failed to decode: {err}")))?;
@@ -92,24 +92,24 @@ impl TokensGenerator {
             &claim,
             &EncodingKey::from_secret(self.secret_key.as_bytes()),
         )
-        .map_err(|err| eyre!("failed to generate token: {err}"))
+        .context("failed to generate token")
     }
 
     pub fn decode_token<T>(&self, req: &tonic::Request<T>) -> eyre::Result<RoomAccessClaim> {
         let token = req
             .metadata()
             .get("authorization")
-            .ok_or_else(|| eyre!("missing authorization header"))?
+            .context("missing authorization header")?
             .to_str()?
             .strip_prefix("Bearer ")
-            .ok_or_else(|| eyre!("invalid authorization header"))?;
+            .context("invalid authorization header")?;
 
         let token = jsonwebtoken::decode::<RoomAccessClaim>(
             token,
             &DecodingKey::from_secret(self.secret_key.as_bytes()),
             &Validation::default(), // TODO: add validation
         )
-        .map_err(|err| eyre!("failed to decode token: {err}"))?
+        .context("failed to decode token")?
         .claims;
 
         Ok(token)

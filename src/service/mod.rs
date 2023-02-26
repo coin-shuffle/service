@@ -25,7 +25,7 @@ where
     tokens_generator: TokensGenerator,
 }
 
-pub const MIN_ROOM_SIZE: usize = 3;
+pub const MIN_ROOM_SIZE: usize = 3; // TODO: Move to config
 
 #[tonic::async_trait]
 impl<S, C> ShuffleService for Service<S, C>
@@ -47,14 +47,14 @@ where
             .await
             .map_err(|err| {
                 log::error!("failed to get utxo from contract: {err}");
-                tonic::Status::internal("failed to utxo from contract")
+                tonic::Status::internal("failed to get utxo from contract")
             })?
             .ok_or_else(|| {
                 log::debug!("utxo with id {utxo_id} not found");
                 tonic::Status::invalid_argument("no utxo with such id")
             })?;
 
-        verify_join_signature(&utxo_id, request.timestamp, request.signature, utxo.owner).map_err(
+        verify_join_signature(&utxo.id, request.timestamp, request.signature, utxo.owner).map_err(
             |err| {
                 log::debug!("failed to verify join signature: {err}");
                 tonic::Status::invalid_argument("invalid signature or timestamp")
@@ -67,14 +67,6 @@ where
             .map_err(|err| {
                 log::error!("failed to add participant: {err}");
                 tonic::Status::internal("failed to add participant")
-            })?;
-
-        let token = self
-            .tokens_generator
-            .generate_token(utxo.token, utxo.amount, utxo.id)
-            .map_err(|err| {
-                log::error!("failed to generate token: {err}");
-                tonic::Status::internal("failed to generate token")
             })?;
 
         let queue_length = self
@@ -97,7 +89,13 @@ where
         }
 
         Ok(tonic::Response::new(JoinShuffleRoomResponse {
-            room_access_token: token,
+            room_access_token: self
+                .tokens_generator
+                .generate_token(utxo.token, utxo.amount, utxo.id)
+                .map_err(|err| {
+                    log::error!("failed to generate token: {err}");
+                    tonic::Status::internal("failed to generate token")
+                })?,
         }))
     }
 
@@ -113,14 +111,14 @@ where
                 tonic::Status::unauthenticated("invalid token")
             })?;
 
-        let participant = self
+        let is_room_ready = self
             .inner
             .get_participant(&claims.utxo_id)
             .await
             .map_err(|err| {
                 log::error!("failed to get participant: {err}");
                 tonic::Status::unauthenticated("no participant with such id")
-            })?;
+            })?.room_id.is_some();
 
         let new_token = self
             .tokens_generator
@@ -132,7 +130,7 @@ where
 
         // if participant is not in the room, it means that the shuffle is not started yet
         Ok(tonic::Response::new(IsReadyForShuffleResponse {
-            ready: participant.room_id.is_some(),
+            ready: is_room_ready,
             room_access_token: new_token,
         }))
     }

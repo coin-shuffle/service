@@ -32,7 +32,7 @@ impl Cli {
 
         match self.command {
             Command::Run => {
-                actions::run_server(config).await?;
+                actions::run_service(config).await?;
             }
         }
 
