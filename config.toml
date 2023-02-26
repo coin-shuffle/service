@@ -6,4 +6,7 @@ level = "DEBUG"
 
 [database]
 in-memory = true # use in memory database
-url = "postgresql://postgres@postgres:postgres/state"
+url = "postgresql://postgres@localhost:5432/state"
+
+[signer]
+private-key = ""

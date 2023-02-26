@@ -1,4 +1,4 @@
-use std::net::SocketAddrV4;
+use std::net::{Ipv4Addr, SocketAddrV4};
 
 use eyre::Context;
 
@@ -9,6 +9,14 @@ pub(super) struct Raw {
 
 pub struct Config {
     pub address: SocketAddrV4,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            address: SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080),
+        }
+    }
 }
 
 impl TryFrom<Raw> for Config {

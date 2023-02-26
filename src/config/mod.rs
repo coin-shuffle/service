@@ -1,22 +1,25 @@
-use std::path::PathBuf;
-
-use eyre::Context;
-
 mod database;
 mod logger;
 mod service;
+mod signer;
+
+use eyre::Context;
+use std::path::PathBuf;
 
 #[derive(serde::Deserialize)]
 struct Raw {
     database: database::Raw,
     logger: logger::Raw,
     service: service::Raw,
+    // signer: signer::Raw,
 }
 
+#[derive(Default)]
 pub struct Config {
     pub database: database::Config,
     pub logger: logger::Config,
     pub service: service::Config,
+    // pub signer: signer::Config,
 }
 
 impl TryFrom<Raw> for Config {
@@ -27,6 +30,7 @@ impl TryFrom<Raw> for Config {
             database: raw.database.try_into()?,
             logger: raw.logger.try_into()?,
             service: raw.service.try_into()?,
+            // signer: raw.signer.try_into()?,
         })
     }
 }

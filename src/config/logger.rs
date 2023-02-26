@@ -9,6 +9,14 @@ pub struct Config {
     pub level: log::Level,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            level: log::Level::Info,
+        }
+    }
+}
+
 impl TryFrom<Raw> for Config {
     type Error = eyre::Error;
 
