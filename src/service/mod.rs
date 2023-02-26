@@ -1,18 +1,26 @@
 mod auth;
+mod room;
+
+use std::time::Duration;
+use std::{collections::HashMap, sync::Arc};
 
 use coin_shuffle_contracts_bindings::utxo::Contract;
-use coin_shuffle_core::service::{
-    storage::Storage, types::participant, waiter::simple::SimpleWaiter, Service as Core,
-};
+use coin_shuffle_core::service::{storage::Storage, waiter::simple::SimpleWaiter, Service as Core};
 use coin_shuffle_protos::v1::{
     shuffle_service_server::ShuffleService, ConnectShuffleRoomRequest, IsReadyForShuffleRequest,
     IsReadyForShuffleResponse, JoinShuffleRoomRequest, JoinShuffleRoomResponse, ShuffleEvent,
     ShuffleRoundRequest, ShuffleRoundResponse, SignShuffleTxRequest, SignShuffleTxResponse,
 };
 use ethers_core::types::U256;
+use tokio::sync::Mutex;
+use tokio::{sync::mpsc::Sender as StreamSender, time::timeout};
 use tokio_stream::wrappers::ReceiverStream;
+use uuid::Uuid;
 
-use self::auth::{verify_join_signature, TokensGenerator};
+use self::{
+    auth::{verify_join_signature, TokensGenerator},
+    room::{RoomConnection, RoomEvents},
+};
 
 pub struct Service<S, C>
 where
@@ -23,6 +31,8 @@ where
     utxo_contract: C,
     storage: S,
     tokens_generator: TokensGenerator,
+
+    rooms: Arc<Mutex<HashMap<Uuid, StreamSender<RoomEvents>>>>,
 }
 
 pub const MIN_ROOM_SIZE: usize = 3; // TODO: Move to config
@@ -118,7 +128,9 @@ where
             .map_err(|err| {
                 log::error!("failed to get participant: {err}");
                 tonic::Status::unauthenticated("no participant with such id")
-            })?.room_id.is_some();
+            })?
+            .room_id
+            .is_some();
 
         let new_token = self
             .tokens_generator
@@ -139,9 +151,40 @@ where
 
     async fn connect_shuffle_room(
         &self,
-        _request: tonic::Request<ConnectShuffleRoomRequest>,
+        request: tonic::Request<ConnectShuffleRoomRequest>,
     ) -> Result<tonic::Response<Self::ConnectShuffleRoomStream>, tonic::Status> {
-        unimplemented!()
+        // TODO: move to separate method
+        let claims = self
+            .tokens_generator
+            .decode_token(&request)
+            .map_err(|err| {
+                log::debug!("failed to decode token: {err}");
+                tonic::Status::unauthenticated("invalid token")
+            })?;
+
+        let (events_sender, events_receiver) = tokio::sync::mpsc::channel(10);
+
+        let room = RoomConnection::new(events_receiver);
+
+        let rooms_lock = self.rooms.lock().await;
+
+        let room_id = Uuid::new_v4(); // FIXME: get room id from participant
+
+        rooms_lock.insert(room_id, events_sender);
+
+        let timeout_secs = Duration::from_secs(60 * 60 * 24); // TODO: get from room
+
+        // tokio::spawn(async {
+        //     if let Err(_) = timeout(timeout_secs, room.run()).await {
+        //         log::error!("failed to receive event from room");
+        //     }
+        // });
+
+        let (tx, rx) = tokio::sync::mpsc::channel(10);
+
+        room.add_participant(claims.utxo_id, tx);
+
+        Ok(tonic::Response::new(ReceiverStream::new(rx)))
     }
 
     async fn shuffle_round(
