@@ -620,7 +620,7 @@ dependencies = [
 [[package]]
 name = "coin-shuffle-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/coin-shuffle/core.git?branch=fix/storage-transaction#9835f77bcc3907340416fbd34d2b2a9572254c73"
+source = "git+ssh://git@github.com/coin-shuffle/core.git?branch=develop#f295a21a3c1ad7301247bb4d19ded764bc3f179d"
 dependencies = [
  "async-trait",
  "coin-shuffle-contracts-bindings",
@@ -3491,6 +3491,7 @@ dependencies = [
  "jsonwebtoken",
  "log",
  "open-fastrlp",
+ "rsa",
  "serde",
  "serde_json",
  "sqlx",
