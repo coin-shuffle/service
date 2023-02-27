@@ -56,6 +56,7 @@ where
             utxo_contract: contract,
             storage,
             tokens_generator: TokensGenerator::new(token_key),
+            rooms: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

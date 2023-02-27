@@ -150,7 +150,7 @@ impl Storage for Database {
 
     async fn get_participant(&self, participant: &U256) -> Result<Option<Participant>, Error> {
         let utxo_id =
-            u256_to_big_decimal(&participant).map_err(|err| Error::Internal(err.to_string()))?;
+            u256_to_big_decimal(participant).map_err(|err| Error::Internal(err.to_string()))?;
 
         let participant_row = sqlx::query_as!(
             ParticipantRow,
