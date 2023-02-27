@@ -1,3 +1,4 @@
+mod contract;
 mod database;
 mod logger;
 mod service;
@@ -11,6 +12,7 @@ struct Raw {
     database: database::Raw,
     logger: logger::Raw,
     service: service::Raw,
+    contract: contract::Raw,
     // signer: signer::Raw,
 }
 
@@ -19,6 +21,7 @@ pub struct Config {
     pub database: database::Config,
     pub logger: logger::Config,
     pub service: service::Config,
+    pub contract: contract::Config,
     // pub signer: signer::Config,
 }
 
@@ -30,6 +33,7 @@ impl TryFrom<Raw> for Config {
             database: raw.database.try_into()?,
             logger: raw.logger.try_into()?,
             service: raw.service.try_into()?,
+            contract: raw.contract.try_into()?,
             // signer: raw.signer.try_into()?,
         })
     }

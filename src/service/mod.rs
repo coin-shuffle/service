@@ -23,6 +23,25 @@ where
     tokens_generator: TokensGenerator,
 }
 
+impl<S, C> Service<S, C>
+where
+    S: Storage,
+    C: Contract + Clone,
+{
+    pub fn new(contract: C, storage: S, token_key: String) -> Self {
+        Self {
+            inner: Core::new(
+                storage.clone(),
+                SimpleWaiter::new(MIN_ROOM_SIZE, storage.clone()),
+                contract.clone(),
+            ),
+            utxo_contract: contract,
+            storage,
+            tokens_generator: TokensGenerator::new(token_key),
+        }
+    }
+}
+
 pub const MIN_ROOM_SIZE: usize = 3; // TODO: Move to config
 
 #[tonic::async_trait]

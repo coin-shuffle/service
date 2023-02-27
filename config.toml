@@ -1,12 +1,16 @@
 [service]
-address = "localhost:8080"
+address = "127.0.0.1:8081"
 
 [logger]
 level = "DEBUG"
 
 [database]
-in-memory = true # use in memory database
-url       = "postgresql://postgres@localhost:5432/state"
+in_memory = false
+url       = "postgresql://postgres:postgres@localhost:5432/state"
+
+[contract]
+url = "https://goerli.blockpi.network/v1/rpc/public"
+address = "0x343e93099adf585C93697c99D8b5360300049477"
 
 [signer]
 private-key = ""
