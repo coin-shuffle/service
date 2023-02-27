@@ -1,9 +1,10 @@
 mod auth;
 mod room;
 
-use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
+use tokio::time::{interval_at, Instant};
 
+use crate::service::room::ROUND_DEADLINE;
 use coin_shuffle_contracts_bindings::utxo::Contract;
 use coin_shuffle_core::service::{storage::Storage, waiter::simple::SimpleWaiter, Service as Core};
 use coin_shuffle_protos::v1::{
@@ -12,8 +13,9 @@ use coin_shuffle_protos::v1::{
     ShuffleRoundRequest, ShuffleRoundResponse, SignShuffleTxRequest, SignShuffleTxResponse,
 };
 use ethers_core::types::U256;
+use rsa::{BigUint, RsaPublicKey};
+use tokio::sync::mpsc::Sender as StreamSender;
 use tokio::sync::Mutex;
-use tokio::{sync::mpsc::Sender as StreamSender, time::timeout};
 use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
@@ -22,10 +24,12 @@ use self::{
     room::{RoomConnection, RoomEvents},
 };
 
+// TODO: Separate requests data parsing level
+
 pub struct Service<S, C>
 where
-    S: Storage,
-    C: Contract,
+    S: Storage + Clone,
+    C: Contract + Clone,
 {
     inner: Core<S, SimpleWaiter<S>, C>,
     utxo_contract: C,
@@ -35,13 +39,13 @@ where
     rooms: Arc<Mutex<HashMap<Uuid, StreamSender<RoomEvents>>>>,
 }
 
-pub const MIN_ROOM_SIZE: usize = 3; // TODO: Move to config
+pub const MIN_ROOM_SIZE: usize = 4; // TODO: Move to config
 
 #[tonic::async_trait]
 impl<S, C> ShuffleService for Service<S, C>
 where
-    S: Storage + 'static,
-    C: Contract + Send + Sync + 'static,
+    S: Storage + Clone + 'static,
+    C: Contract + Send + Sync + Clone + 'static,
 {
     async fn join_shuffle_room(
         &self,
@@ -57,7 +61,7 @@ where
             .await
             .map_err(|err| {
                 log::error!("failed to get utxo from contract: {err}");
-                tonic::Status::internal("failed to get utxo from contract")
+                tonic::Status::internal("internal error")
             })?
             .ok_or_else(|| {
                 log::debug!("utxo with id {utxo_id} not found");
@@ -76,16 +80,16 @@ where
             .await
             .map_err(|err| {
                 log::error!("failed to add participant: {err}");
-                tonic::Status::internal("failed to add participant")
+                tonic::Status::internal("internal error")
             })?;
 
         let queue_length = self
             .storage
-            .queue_length(&utxo.token, &utxo.amount)
+            .queue_len(&utxo.token, &utxo.amount)
             .await
             .map_err(|err| {
                 log::error!("failed to get queue length: {err}");
-                tonic::Status::internal("failed to get queue length")
+                tonic::Status::internal("internal error")
             })?;
 
         if queue_length >= MIN_ROOM_SIZE {
@@ -94,17 +98,17 @@ where
                 .await
                 .map_err(|err| {
                     log::error!("failed to start shuffle: {err}");
-                    tonic::Status::internal("failed to start shuffle")
+                    tonic::Status::internal("internal error")
                 })?;
         }
 
         Ok(tonic::Response::new(JoinShuffleRoomResponse {
             room_access_token: self
                 .tokens_generator
-                .generate_token(utxo.token, utxo.amount, utxo.id)
+                .generate_shuffle_token(utxo.token, utxo.amount, utxo.id)
                 .map_err(|err| {
                     log::error!("failed to generate token: {err}");
-                    tonic::Status::internal("failed to generate token")
+                    tonic::Status::internal("internal error")
                 })?,
         }))
     }
@@ -134,10 +138,10 @@ where
 
         let new_token = self
             .tokens_generator
-            .generate_token(claims.token, claims.amount, claims.utxo_id)
+            .generate_shuffle_token(claims.token, claims.amount, claims.utxo_id)
             .map_err(|err| {
                 log::error!("failed to generate token: {err}");
-                tonic::Status::internal("failed to generate token")
+                tonic::Status::internal("internal error")
             })?;
 
         // if participant is not in the room, it means that the shuffle is not started yet
@@ -153,7 +157,6 @@ where
         &self,
         request: tonic::Request<ConnectShuffleRoomRequest>,
     ) -> Result<tonic::Response<Self::ConnectShuffleRoomStream>, tonic::Status> {
-        // TODO: move to separate method
         let claims = self
             .tokens_generator
             .decode_token(&request)
@@ -162,29 +165,57 @@ where
                 tonic::Status::unauthenticated("invalid token")
             })?;
 
-        let (events_sender, events_receiver) = tokio::sync::mpsc::channel(10);
+        let participant = self
+            .inner
+            .get_participant(&claims.utxo_id)
+            .await
+            .map_err(|err| {
+                log::error!("failed to get participant: {err}");
+                tonic::Status::internal("internal error")
+            })?;
 
-        let room = RoomConnection::new(events_receiver);
+        let room_id = participant.room_id.ok_or_else(|| {
+            log::debug!("room is absent");
+            tonic::Status::not_found("room is absent")
+        })?;
 
-        let rooms_lock = self.rooms.lock().await;
+        let room_stream = self.get_room_stream(room_id).await.ok_or_else(|| {
+            log::error!("failed to find the room with id: {}", room_id);
+            tonic::Status::internal("internal error")
+        })?;
 
-        let room_id = Uuid::new_v4(); // FIXME: get room id from participant
+        let (event_sender, event_receiver) = tokio::sync::mpsc::channel(10);
 
-        rooms_lock.insert(room_id, events_sender);
+        let rsa_public_key_raw = request.into_inner().public_key.ok_or_else(|| {
+            log::debug!("public key is missing, utxo_id: {}", claims.utxo_id);
+            tonic::Status::invalid_argument("public key is missing")
+        })?;
 
-        let timeout_secs = Duration::from_secs(60 * 60 * 24); // TODO: get from room
+        let rsa_public_key = RsaPublicKey::new(
+            BigUint::from_bytes_be(rsa_public_key_raw.modulus.as_slice()),
+            BigUint::from_bytes_be(rsa_public_key_raw.exponent.as_slice()),
+        )
+        .map_err(|err| {
+            log::error!("failed to parse rsa public key: {err}");
+            tonic::Status::invalid_argument("invalid rsa public key")
+        })?;
 
-        // tokio::spawn(async {
-        //     if let Err(_) = timeout(timeout_secs, room.run()).await {
-        //         log::error!("failed to receive event from room");
-        //     }
-        // });
+        room_stream
+            .send(RoomEvents::AddParticipant((
+                participant.utxo_id,
+                event_sender,
+                rsa_public_key,
+            )))
+            .await
+            .map_err(|err| {
+                log::error!(
+                    "failed to add user to room, utxo_id: {}, room_id: {room_id}: {err}",
+                    participant.utxo_id,
+                );
+                tonic::Status::internal("internal error")
+            })?;
 
-        let (tx, rx) = tokio::sync::mpsc::channel(10);
-
-        room.add_participant(claims.utxo_id, tx);
-
-        Ok(tonic::Response::new(ReceiverStream::new(rx)))
+        Ok(tonic::Response::new(ReceiverStream::new(event_receiver)))
     }
 
     async fn shuffle_round(
@@ -199,5 +230,35 @@ where
         _request: tonic::Request<SignShuffleTxRequest>,
     ) -> Result<tonic::Response<SignShuffleTxResponse>, tonic::Status> {
         unimplemented!()
+    }
+}
+
+impl<S, C> Service<S, C>
+where
+    S: Storage + Clone + 'static,
+    C: Contract + Send + Sync + Clone + 'static,
+{
+    async fn get_room_stream(&self, room_id: Uuid) -> Option<StreamSender<RoomEvents>> {
+        let mut rooms_lock = self.rooms.lock().await;
+        if !rooms_lock.contains_key(&room_id) {
+            let (internal_events_sender, internal_events_receiver) = tokio::sync::mpsc::channel(10);
+            let mut room = RoomConnection::new(
+                internal_events_receiver,
+                interval_at(Instant::now() + ROUND_DEADLINE, ROUND_DEADLINE),
+                room_id,
+                self.inner.clone(),
+                self.tokens_generator.clone(),
+            );
+
+            tokio::spawn(async move {
+                room.run();
+            });
+
+            rooms_lock.insert(room_id, internal_events_sender.clone());
+
+            return Some(internal_events_sender);
+        }
+
+        rooms_lock.get(&room_id).cloned()
     }
 }

@@ -8,6 +8,7 @@ use ethers_core::types::{Address, RecoveryMessage, Signature, U256};
 use eyre::{eyre, Context, ContextCompat};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
 use open_fastrlp::Decodable;
+use uuid::Uuid;
 
 const U256_BYTES: usize = 32;
 const TIMESTAMP_BYTES: usize = 4;
@@ -22,7 +23,7 @@ pub fn verify_join_signature(
     let mut message = Vec::with_capacity(MESSAGE_LEN);
 
     utxo_id.to_big_endian(&mut message[0..U256_BYTES]);
-    message[MESSAGE_LEN].copy_from_slice(&timestamp.to_be_bytes());
+    message[U256_BYTES..MESSAGE_LEN].copy_from_slice(&timestamp.to_be_bytes());
 
     let signature = Signature::decode(&mut signature.deref())
         .map_err(|err| JoinSignatureError::InvalidSignature(eyre!("failed to decode: {err}")))?;
@@ -50,10 +51,17 @@ pub enum JoinSignatureError {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct RoomAccessClaim {
+pub struct ShuffleAccessClaim {
     pub token: Address,
     pub amount: U256,
     pub utxo_id: U256,
+    pub exp: usize,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RoomAccessClaim {
+    pub utxo_id: U256,
+    pub room_id: Uuid,
     pub exp: usize,
 }
 
@@ -69,7 +77,7 @@ impl TokensGenerator {
         }
     }
 
-    pub fn generate_token(
+    pub fn generate_shuffle_token(
         &self,
         token: Address,
         amount: U256,
@@ -80,7 +88,7 @@ impl TokensGenerator {
             .as_secs() as usize
             + 60 * 60 * 24;
 
-        let claim = RoomAccessClaim {
+        let claim = ShuffleAccessClaim {
             token,
             amount,
             utxo_id,
@@ -95,7 +103,27 @@ impl TokensGenerator {
         .context("failed to generate token")
     }
 
-    pub fn decode_token<T>(&self, req: &tonic::Request<T>) -> eyre::Result<RoomAccessClaim> {
+    pub fn generate_room_token(&self, room_id: Uuid, utxo_id: U256) -> Result<String, eyre::Error> {
+        let exp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_secs() as usize
+            + 60 * 60 * 24;
+
+        let claim = RoomAccessClaim {
+            utxo_id,
+            room_id,
+            exp,
+        };
+
+        jsonwebtoken::encode(
+            &Header::default(),
+            &claim,
+            &EncodingKey::from_secret(self.secret_key.as_bytes()),
+        )
+        .context("failed to generate token")
+    }
+
+    pub fn decode_token<T>(&self, req: &tonic::Request<T>) -> eyre::Result<ShuffleAccessClaim> {
         let token = req
             .metadata()
             .get("authorization")
@@ -104,7 +132,7 @@ impl TokensGenerator {
             .strip_prefix("Bearer ")
             .context("invalid authorization header")?;
 
-        let token = jsonwebtoken::decode::<RoomAccessClaim>(
+        let token = jsonwebtoken::decode::<ShuffleAccessClaim>(
             token,
             &DecodingKey::from_secret(self.secret_key.as_bytes()),
             &Validation::default(), // TODO: add validation
