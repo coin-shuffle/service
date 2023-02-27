@@ -22,7 +22,7 @@ pub fn verify_join_signature(
     let mut message = Vec::with_capacity(MESSAGE_LEN);
 
     utxo_id.to_big_endian(&mut message[0..U256_BYTES]);
-    message[MESSAGE_LEN].copy_from_slice(&timestamp.to_be_bytes());
+    message[U256_BYTES..MESSAGE_LEN].copy_from_slice(&timestamp.to_be_bytes());
 
     let signature = Signature::decode(&mut signature.deref())
         .map_err(|err| JoinSignatureError::InvalidSignature(eyre!("failed to decode: {err}")))?;

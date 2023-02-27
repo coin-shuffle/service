@@ -1,9 +1,7 @@
 mod auth;
 
 use coin_shuffle_contracts_bindings::utxo::Contract;
-use coin_shuffle_core::service::{
-    storage::Storage, types::participant, waiter::simple::SimpleWaiter, Service as Core,
-};
+use coin_shuffle_core::service::{storage::Storage, waiter::simple::SimpleWaiter, Service as Core};
 use coin_shuffle_protos::v1::{
     shuffle_service_server::ShuffleService, ConnectShuffleRoomRequest, IsReadyForShuffleRequest,
     IsReadyForShuffleResponse, JoinShuffleRoomRequest, JoinShuffleRoomResponse, ShuffleEvent,
@@ -71,7 +69,7 @@ where
 
         let queue_length = self
             .storage
-            .queue_length(&utxo.token, &utxo.amount)
+            .queue_len(&utxo.token, &utxo.amount)
             .await
             .map_err(|err| {
                 log::error!("failed to get queue length: {err}");
@@ -118,7 +116,9 @@ where
             .map_err(|err| {
                 log::error!("failed to get participant: {err}");
                 tonic::Status::unauthenticated("no participant with such id")
-            })?.room_id.is_some();
+            })?
+            .room_id
+            .is_some();
 
         let new_token = self
             .tokens_generator
