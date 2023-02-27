@@ -1,9 +1,6 @@
 mod auth;
 mod room;
 
-use std::{collections::HashMap, sync::Arc};
-use tokio::time::{interval_at, Instant};
-
 use crate::service::room::ROUND_DEADLINE;
 use coin_shuffle_contracts_bindings::utxo::Contract;
 use coin_shuffle_core::service::{storage::Storage, waiter::simple::SimpleWaiter, Service as Core};
@@ -12,10 +9,15 @@ use coin_shuffle_protos::v1::{
     IsReadyForShuffleResponse, JoinShuffleRoomRequest, JoinShuffleRoomResponse, ShuffleEvent,
     ShuffleRoundRequest, ShuffleRoundResponse, SignShuffleTxRequest, SignShuffleTxResponse,
 };
+use ethers_core::abi::ethereum_types::Signature;
 use ethers_core::types::U256;
 use rsa::{BigUint, RsaPublicKey};
+use std::collections::hash_map::Entry::Vacant;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::Sender as StreamSender;
 use tokio::sync::Mutex;
+use tokio::time::{interval_at, Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
@@ -119,7 +121,7 @@ where
     ) -> Result<tonic::Response<IsReadyForShuffleResponse>, tonic::Status> {
         let claims = self
             .tokens_generator
-            .decode_token(&request)
+            .decode_shuffle_token(&request)
             .map_err(|err| {
                 log::debug!("failed to decode token: {err}");
                 tonic::Status::unauthenticated("invalid token")
@@ -159,7 +161,7 @@ where
     ) -> Result<tonic::Response<Self::ConnectShuffleRoomStream>, tonic::Status> {
         let claims = self
             .tokens_generator
-            .decode_token(&request)
+            .decode_shuffle_token(&request)
             .map_err(|err| {
                 log::debug!("failed to decode token: {err}");
                 tonic::Status::unauthenticated("invalid token")
@@ -220,16 +222,72 @@ where
 
     async fn shuffle_round(
         &self,
-        _request: tonic::Request<ShuffleRoundRequest>,
+        request: tonic::Request<ShuffleRoundRequest>,
     ) -> Result<tonic::Response<ShuffleRoundResponse>, tonic::Status> {
-        unimplemented!()
+        let claims = self
+            .tokens_generator
+            .decode_room_token(&request)
+            .map_err(|err| {
+                log::debug!("failed to decode token: {err}");
+                tonic::Status::unauthenticated("invalid token")
+            })?;
+
+        let room_stream = self.get_room_stream(claims.room_id).await.ok_or_else(|| {
+            log::error!("failed to find the room with id: {}", claims.room_id);
+            tonic::Status::internal("internal error")
+        })?;
+
+        room_stream
+            .send(RoomEvents::ShuffleRound((
+                claims.utxo_id,
+                request.into_inner().encoded_outputs,
+            )))
+            .await
+            .map_err(|err| {
+                log::error!(
+                    "failed to internal send shuffle round event, utxo_id: {}, room_id: {}: {err}",
+                    claims.utxo_id,
+                    claims.room_id,
+                );
+                tonic::Status::internal("internal error")
+            })?;
+
+        Ok(tonic::Response::new(ShuffleRoundResponse {}))
     }
 
     async fn sign_shuffle_tx(
         &self,
-        _request: tonic::Request<SignShuffleTxRequest>,
+        request: tonic::Request<SignShuffleTxRequest>,
     ) -> Result<tonic::Response<SignShuffleTxResponse>, tonic::Status> {
-        unimplemented!()
+        let claims = self
+            .tokens_generator
+            .decode_room_token(&request)
+            .map_err(|err| {
+                log::debug!("failed to decode token: {err}");
+                tonic::Status::unauthenticated("invalid token")
+            })?;
+
+        let room_stream = self.get_room_stream(claims.room_id).await.ok_or_else(|| {
+            log::error!("failed to find the room with id: {}", claims.room_id);
+            tonic::Status::internal("internal error")
+        })?;
+
+        room_stream
+            .send(RoomEvents::SignedOutput((
+                claims.utxo_id,
+                Signature::from_slice(request.into_inner().signature.as_slice()),
+            )))
+            .await
+            .map_err(|err| {
+                log::error!(
+                    "failed to internal send shuffle round event, utxo_id: {}, room_id: {}: {err}",
+                    claims.utxo_id,
+                    claims.room_id,
+                );
+                tonic::Status::internal("internal error")
+            })?;
+
+        Ok(tonic::Response::new(SignShuffleTxResponse {}))
     }
 }
 
@@ -240,8 +298,8 @@ where
 {
     async fn get_room_stream(&self, room_id: Uuid) -> Option<StreamSender<RoomEvents>> {
         let mut rooms_lock = self.rooms.lock().await;
-        if !rooms_lock.contains_key(&room_id) {
-            let (internal_events_sender, internal_events_receiver) = tokio::sync::mpsc::channel(10);
+        if let Vacant(e) = rooms_lock.entry(room_id) {
+            let (internal_events_sender, internal_events_receiver) = channel(10);
             let mut room = RoomConnection::new(
                 internal_events_receiver,
                 interval_at(Instant::now() + ROUND_DEADLINE, ROUND_DEADLINE),
@@ -251,10 +309,10 @@ where
             );
 
             tokio::spawn(async move {
-                room.run();
+                room.run().await;
             });
 
-            rooms_lock.insert(room_id, internal_events_sender.clone());
+            e.insert(internal_events_sender.clone());
 
             return Some(internal_events_sender);
         }

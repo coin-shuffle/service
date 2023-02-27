@@ -529,12 +529,12 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.1.6"
+version = "4.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec0b0588d44d4d63a87dbd75c136c166bbfd9a86a31cb89e09906521c7d3f5e3"
+checksum = "2f3061d6db6d8fcbbd4b05e057f2acace52e64e96b498c08c2d7a4e65addd340"
 dependencies = [
  "bitflags",
- "clap_derive 4.1.0",
+ "clap_derive 4.1.7",
  "clap_lex 0.3.2",
  "is-terminal",
  "once_cell",
@@ -557,9 +557,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.1.0"
+version = "4.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "684a277d672e91966334af371f1a7b5833f9aa00b07c84e92fbce95e00208ce8"
+checksum = "34d122164198950ba84a918270a3bb3f7ededd25e15f7451673d986f55bd2667"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -609,7 +609,7 @@ dependencies = [
 [[package]]
 name = "coin-shuffle-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/coin-shuffle/core.git?branch=develop#320b6b0f854c4132cf4f2092df7d12f93f981a63"
+source = "git+ssh://git@github.com/coin-shuffle/core.git?branch=develop#f949fa37dd6f19e84718b9537b9fb14a4f4ec4fe"
 dependencies = [
  "async-trait",
  "coin-shuffle-contracts-bindings",
@@ -1203,7 +1203,7 @@ dependencies = [
 [[package]]
 name = "ethers-contract"
 version = "1.0.2"
-source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#620300f3571d427f39a767d7c4218f9ef9352fad"
+source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#5d15031b385abde93d4673fed856c5805271422c"
 dependencies = [
  "ethers-contract-abigen",
  "ethers-contract-derive",
@@ -1221,7 +1221,7 @@ dependencies = [
 [[package]]
 name = "ethers-contract-abigen"
 version = "1.0.2"
-source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#620300f3571d427f39a767d7c4218f9ef9352fad"
+source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#5d15031b385abde93d4673fed856c5805271422c"
 dependencies = [
  "Inflector",
  "cfg-if",
@@ -1245,7 +1245,7 @@ dependencies = [
 [[package]]
 name = "ethers-contract-derive"
 version = "1.0.2"
-source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#620300f3571d427f39a767d7c4218f9ef9352fad"
+source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#5d15031b385abde93d4673fed856c5805271422c"
 dependencies = [
  "ethers-contract-abigen",
  "ethers-core 1.0.2 (git+https://github.com/gakonst/ethers-rs.git?branch=master)",
@@ -1289,7 +1289,7 @@ dependencies = [
 [[package]]
 name = "ethers-core"
 version = "1.0.2"
-source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#620300f3571d427f39a767d7c4218f9ef9352fad"
+source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#5d15031b385abde93d4673fed856c5805271422c"
 dependencies = [
  "arrayvec",
  "bytes",
@@ -1339,7 +1339,7 @@ dependencies = [
 [[package]]
 name = "ethers-etherscan"
 version = "1.0.2"
-source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#620300f3571d427f39a767d7c4218f9ef9352fad"
+source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#5d15031b385abde93d4673fed856c5805271422c"
 dependencies = [
  "ethers-core 1.0.2 (git+https://github.com/gakonst/ethers-rs.git?branch=master)",
  "getrandom",
@@ -1381,10 +1381,10 @@ dependencies = [
 [[package]]
 name = "ethers-middleware"
 version = "1.0.2"
-source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#620300f3571d427f39a767d7c4218f9ef9352fad"
+source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#5d15031b385abde93d4673fed856c5805271422c"
 dependencies = [
  "async-trait",
- "auto_impl 0.5.0",
+ "auto_impl 1.0.1",
  "ethers-contract 1.0.2 (git+https://github.com/gakonst/ethers-rs.git?branch=master)",
  "ethers-core 1.0.2 (git+https://github.com/gakonst/ethers-rs.git?branch=master)",
  "ethers-etherscan 1.0.2 (git+https://github.com/gakonst/ethers-rs.git?branch=master)",
@@ -1441,7 +1441,7 @@ dependencies = [
 [[package]]
 name = "ethers-providers"
 version = "1.0.2"
-source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#620300f3571d427f39a767d7c4218f9ef9352fad"
+source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#5d15031b385abde93d4673fed856c5805271422c"
 dependencies = [
  "async-trait",
  "auto_impl 1.0.1",
@@ -1496,7 +1496,7 @@ dependencies = [
 [[package]]
 name = "ethers-signers"
 version = "1.0.2"
-source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#620300f3571d427f39a767d7c4218f9ef9352fad"
+source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#5d15031b385abde93d4673fed856c5805271422c"
 dependencies = [
  "async-trait",
  "coins-bip32",
@@ -1508,12 +1508,13 @@ dependencies = [
  "rand",
  "sha2 0.10.6",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
 name = "ethers-solc"
 version = "1.0.2"
-source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#620300f3571d427f39a767d7c4218f9ef9352fad"
+source = "git+https://github.com/gakonst/ethers-rs.git?branch=master#5d15031b385abde93d4673fed856c5805271422c"
 dependencies = [
  "cfg-if",
  "dunce",
@@ -3466,7 +3467,7 @@ name = "service"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "clap 4.1.6",
+ "clap 4.1.7",
  "coin-shuffle-contracts-bindings",
  "coin-shuffle-core",
  "coin-shuffle-protos",

@@ -123,7 +123,10 @@ impl TokensGenerator {
         .context("failed to generate token")
     }
 
-    pub fn decode_token<T>(&self, req: &tonic::Request<T>) -> eyre::Result<ShuffleAccessClaim> {
+    pub fn decode_shuffle_token<T>(
+        &self,
+        req: &tonic::Request<T>,
+    ) -> eyre::Result<ShuffleAccessClaim> {
         let token = req
             .metadata()
             .get("authorization")
@@ -133,6 +136,26 @@ impl TokensGenerator {
             .context("invalid authorization header")?;
 
         let token = jsonwebtoken::decode::<ShuffleAccessClaim>(
+            token,
+            &DecodingKey::from_secret(self.secret_key.as_bytes()),
+            &Validation::default(), // TODO: add validation
+        )
+        .context("failed to decode token")?
+        .claims;
+
+        Ok(token)
+    }
+
+    pub fn decode_room_token<T>(&self, req: &tonic::Request<T>) -> eyre::Result<RoomAccessClaim> {
+        let token = req
+            .metadata()
+            .get("authorization")
+            .context("missing authorization header")?
+            .to_str()?
+            .strip_prefix("Bearer ")
+            .context("invalid authorization header")?;
+
+        let token = jsonwebtoken::decode::<RoomAccessClaim>(
             token,
             &DecodingKey::from_secret(self.secret_key.as_bytes()),
             &Validation::default(), // TODO: add validation
