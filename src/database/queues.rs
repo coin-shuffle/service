@@ -51,7 +51,14 @@ impl Storage for Database {
 
         let mut participants = row.participants.0;
 
-        let poped_participants = participants.drain(..number).collect::<Vec<U256>>();
+        // TODO: remove else
+        let poped_participants = if number > participants.len() {
+            let copy = participants.clone();
+            participants.clear();
+            copy
+        } else {
+            participants.drain(..number).collect::<Vec<U256>>()
+        };
 
         sqlx::query!(
             r#"

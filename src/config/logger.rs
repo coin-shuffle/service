@@ -6,13 +6,13 @@ pub(super) struct Raw {
 }
 
 pub struct Config {
-    pub level: log::Level,
+    pub level: log::LevelFilter,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            level: log::Level::Info,
+            level: log::LevelFilter::Info,
         }
     }
 }

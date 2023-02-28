@@ -1,11 +1,12 @@
 use coin_shuffle_contracts_bindings::utxo::Contract;
-use coin_shuffle_core::service::storage::Storage;
-use coin_shuffle_core::service::types::EncodedOutput;
+use coin_shuffle_core::service::storage::{participants, Storage};
+use coin_shuffle_core::service::types::{EncodedOutput, ShuffleRound};
 use coin_shuffle_core::service::waiter::simple::SimpleWaiter;
 use coin_shuffle_core::service::Service as Core;
+use coin_shuffle_core::types::Output;
 use coin_shuffle_protos::v1::shuffle_event::Body;
 use coin_shuffle_protos::v1::{
-    RsaPublicKey as ProtosRsaPublicKey, ShuffleTxHash, TxSigningOutputs,
+    EncodedOutputs, RsaPublicKey as ProtosRsaPublicKey, ShuffleTxHash, TxSigningOutputs,
 };
 use std::collections::HashMap;
 
@@ -71,6 +72,7 @@ where
     }
 
     pub async fn run(&mut self) {
+        log::info!("new room is opened: {}", self.room_id);
         loop {
             tokio::select! {
                 _ = self.deadline.tick() => {
@@ -116,6 +118,11 @@ where
         stream: StreamSender<Result<ShuffleEvent, tonic::Status>>,
         public_key: RsaPublicKey,
     ) -> Result<()> {
+        log::info!(
+            "[EVENT][{}] add participant handling: {}...",
+            self.room_id,
+            utxo_id
+        );
         self.participant_streams.insert(utxo_id, stream);
 
         self.core
@@ -126,8 +133,14 @@ where
             ))?;
 
         if self.participant_streams.len() == MIN_ROOM_SIZE {
-            self.distribute_public_keys().await?
+            self.distribute_public_keys().await?;
+            self.send_outputs(&utxo_id, Vec::new()).await?;
         }
+        log::info!(
+            "[EVENT][{}] add participant handled: {}",
+            self.room_id,
+            utxo_id
+        );
 
         Ok(())
     }
@@ -137,19 +150,27 @@ where
         utxo_id: U256,
         decoded_outputs: Vec<EncodedOutput>,
     ) -> Result<()> {
+        log::info!("[EVENT][{}] shuffle round: {}...", self.room_id, utxo_id);
         let current_round = self
             .core
             .pass_decoded_outputs(&utxo_id, decoded_outputs)
             .await?;
+        log::info!(
+            "[EVENT] shuffle round current round: {}, part: {}",
+            current_round,
+            utxo_id
+        );
 
         if current_round == self.participant_streams.len() {
-            self.distribute_outputs().await?
+            self.distribute_outputs().await?;
         }
+        log::info!("[EVENT] shuffle round: {}", utxo_id);
 
         Ok(())
     }
 
     pub async fn event_signed_output(&self, utxo_id: U256, signature: Signature) -> Result<()> {
+        log::info!("[EVENT] signed output: {}...", utxo_id);
         self.core
             .pass_outputs_signature(&utxo_id, signature)
             .await
@@ -179,6 +200,7 @@ where
                     .context("failed to send tx_hash to participant")?;
             }
         }
+        log::info!("[EVENT] signed output: {}", utxo_id);
 
         Ok(())
     }
@@ -226,6 +248,16 @@ where
         }
 
         Ok(())
+    }
+
+    /// Send ouputs to participant
+    async fn send_outputs(&self, participants: &U256, outputs: Vec<EncodedOutput>) -> Result<()> {
+        self.participant_streams[participants]
+            .send(Ok(ShuffleEvent {
+                body: Some(Body::EncodedOutputs(EncodedOutputs { outputs })),
+            }))
+            .await
+            .context("failed to send outputs to participant")
     }
 
     pub async fn distribute_outputs(&self) -> Result<()> {

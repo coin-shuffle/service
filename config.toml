@@ -1,5 +1,5 @@
 [service]
-address = "127.0.0.1:8081"
+address = "127.0.0.1:8080"
 
 [logger]
 level = "DEBUG"
@@ -9,8 +9,8 @@ in_memory = false
 url       = "postgresql://postgres:postgres@localhost:5432/state"
 
 [contract]
-url = "https://goerli.blockpi.network/v1/rpc/public"
-address = "0x343e93099adf585C93697c99D8b5360300049477"
+url     = "https://goerli.blockpi.network/v1/rpc/public"
+address = "0x4C0d116d9d028E60904DCA468b9Fa7537Ef8Cd5f"
 
 [signer]
 private-key = ""
