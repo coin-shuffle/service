@@ -81,13 +81,14 @@ where
                     return;
                 }
                 Some(event) = self.events.recv() => {
+                    log::debug!("[ROOM][{}] new event {:?}", self.room_id, event);
                     match self.handle_event(event.clone()).await {
                         Err(err) => {
                             log::error!("[ROOM][{}] {err}", self.room_id);
                             return
                         }
                         Ok(..) => {
-                            log::debug!("[ROOM][{}] event {:?} handled", self.room_id, event)
+                            log::debug!("[ROOM][{}] event handled", self.room_id)
                         }
                     }
                 }
@@ -133,8 +134,14 @@ where
             ))?;
 
         if self.participant_streams.len() == MIN_ROOM_SIZE {
-            self.distribute_public_keys().await?;
-            self.send_outputs(&utxo_id, Vec::new()).await?;
+            self.send_encoded_outputs(
+                &self
+                    .distribute_public_keys()
+                    .await
+                    .context("failed to distribute public keys")?,
+                Vec::new(),
+            )
+            .await?;
         }
         log::info!(
             "[EVENT][{}] add participant handled: {}",
@@ -150,21 +157,38 @@ where
         utxo_id: U256,
         decoded_outputs: Vec<EncodedOutput>,
     ) -> Result<()> {
-        log::info!("[EVENT][{}] shuffle round: {}...", self.room_id, utxo_id);
+        log::info!("[EVENT][{}] shuffle round: {} start", self.room_id, utxo_id);
         let current_round = self
             .core
-            .pass_decoded_outputs(&utxo_id, decoded_outputs)
+            .pass_decoded_outputs(&utxo_id, decoded_outputs.clone())
             .await?;
         log::info!(
-            "[EVENT] shuffle round current round: {}, part: {}",
+            "[EVENT][{}] shuffle round current round: {}, part: {}",
+            self.room_id,
             current_round,
             utxo_id
         );
 
+        let room = self
+            .core
+            .get_room(&self.room_id)
+            .await
+            .context(format!("failed to get room by id: {}", self.room_id))?;
+
         if current_round == self.participant_streams.len() {
-            self.distribute_outputs().await?;
+            self.distribute_outputs()
+                .await
+                .context("failed to distribute outputs")?;
+
+            log::info!("[EVENT] shuffle round: {} end", utxo_id);
+            return Ok(());
         }
-        log::info!("[EVENT] shuffle round: {}", utxo_id);
+
+        self.send_encoded_outputs(&room.participants[current_round], decoded_outputs)
+            .await
+            .context("failed to send outputs to the next participant")?;
+
+        log::info!("[EVENT] shuffle round: {} end", utxo_id);
 
         Ok(())
     }
@@ -205,7 +229,7 @@ where
         Ok(())
     }
 
-    pub async fn distribute_public_keys(&self) -> Result<()> {
+    pub async fn distribute_public_keys(&self) -> Result<U256> {
         let room = self
             .core
             .get_room(&self.room_id)
@@ -247,11 +271,14 @@ where
                 .await?
         }
 
-        Ok(())
+        Ok(room.participants[0])
     }
 
-    /// Send ouputs to participant
-    async fn send_outputs(&self, participants: &U256, outputs: Vec<EncodedOutput>) -> Result<()> {
+    async fn send_encoded_outputs(
+        &self,
+        participants: &U256,
+        outputs: Vec<EncodedOutput>,
+    ) -> Result<()> {
         self.participant_streams[participants]
             .send(Ok(ShuffleEvent {
                 body: Some(Body::EncodedOutputs(EncodedOutputs { outputs })),
