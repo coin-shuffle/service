@@ -13,7 +13,7 @@ struct Raw {
     logger: logger::Raw,
     service: service::Raw,
     contract: contract::Raw,
-    // signer: signer::Raw,
+    signer: signer::Raw,
 }
 
 #[derive(Default)]
@@ -22,7 +22,7 @@ pub struct Config {
     pub logger: logger::Config,
     pub service: service::Config,
     pub contract: contract::Config,
-    // pub signer: signer::Config,
+    pub signer: signer::Config,
 }
 
 impl TryFrom<Raw> for Config {
@@ -34,7 +34,7 @@ impl TryFrom<Raw> for Config {
             logger: raw.logger.try_into()?,
             service: raw.service.try_into()?,
             contract: raw.contract.try_into()?,
-            // signer: raw.signer.try_into()?,
+            signer: raw.signer.try_into()?,
         })
     }
 }

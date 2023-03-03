@@ -206,12 +206,18 @@ where
             .await
             .context("failed to check is all signature have passed")?;
 
+        let room = self.core.get_room(&self.room_id).await?;
+
         if is_signature_passed {
             let tx_hash = self
                 .core
                 .send_transaction(&self.room_id)
                 .await
-                .context("failed to send transaction")?;
+                .map_err(|err| {
+                    log::error!("[{}] {err}", &self.room_id);
+                    err
+                })
+                .unwrap();
 
             for (_, stream) in self.participant_streams.iter() {
                 stream
