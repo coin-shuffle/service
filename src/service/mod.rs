@@ -61,7 +61,11 @@ where
     }
 }
 
+<<<<<<< HEAD
 pub const MIN_ROOM_SIZE: usize = 3; // TODO: Move to config
+=======
+pub const MIN_ROOM_SIZE: usize = 4; // TODO: Move to config
+>>>>>>> develop
 
 #[tonic::async_trait]
 impl<S, C> ShuffleService for Service<S, C>
