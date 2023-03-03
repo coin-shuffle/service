@@ -61,7 +61,11 @@ where
     }
 }
 
+<<<<<<< HEAD
+pub const MIN_ROOM_SIZE: usize = 3; // TODO: Move to config
+=======
 pub const MIN_ROOM_SIZE: usize = 4; // TODO: Move to config
+>>>>>>> develop
 
 #[tonic::async_trait]
 impl<S, C> ShuffleService for Service<S, C>
@@ -73,6 +77,8 @@ where
         &self,
         request: tonic::Request<JoinShuffleRoomRequest>,
     ) -> Result<tonic::Response<JoinShuffleRoomResponse>, tonic::Status> {
+        dbg!(&request);
+
         let request = request.into_inner();
 
         let utxo_id = U256::from_big_endian(&request.utxo_id);
