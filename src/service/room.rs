@@ -57,6 +57,7 @@ where
         room_id: Uuid,
         core: Core<S, SimpleWaiter<S>, C>,
         token_generator: TokensGenerator,
+        room_size: usize,
     ) -> Self {
         Self {
             deadline: interval_at(
@@ -66,9 +67,9 @@ where
             events,
             participant_streams: HashMap::new(),
             room_id,
+            room_size,
             core,
             token_generator,
-            room_size: usize::default(),
         }
     }
 
@@ -154,8 +155,6 @@ where
             self.room_id,
             utxo_id
         );
-
-        self.room_size += 1;
 
         Ok(())
     }

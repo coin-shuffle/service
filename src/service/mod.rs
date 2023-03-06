@@ -336,6 +336,7 @@ where
                 room_id,
                 self.inner.clone(),
                 self.tokens_generator.clone(),
+                self.min_room_size,
             );
             room.set_deadline(interval_at(
                 Instant::now() + self.shuffle_round_deadline,
