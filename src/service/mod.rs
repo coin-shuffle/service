@@ -1,7 +1,6 @@
 mod auth;
 mod room;
 
-use crate::service::room::ROUND_DEADLINE;
 use coin_shuffle_contracts_bindings::utxo::Contract;
 use coin_shuffle_core::service::{storage::Storage, waiter::simple::SimpleWaiter, Service as Core};
 use coin_shuffle_protos::v1::{
@@ -13,6 +12,7 @@ use ethers_core::abi::ethereum_types::Signature;
 use ethers_core::types::U256;
 use rsa::{BigUint, RsaPublicKey};
 use std::collections::hash_map::Entry::Vacant;
+use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::Sender as StreamSender;
@@ -38,6 +38,9 @@ where
     storage: S,
     tokens_generator: TokensGenerator,
 
+    shuffle_round_deadline: Duration,
+    min_room_size: usize,
+
     rooms: Arc<Mutex<HashMap<Uuid, StreamSender<RoomEvents>>>>,
 }
 
@@ -46,11 +49,19 @@ where
     S: Storage,
     C: Contract + Clone,
 {
-    pub fn new(contract: C, storage: S, token_key: String) -> Self {
+    pub fn new(
+        contract: C,
+        storage: S,
+        token_key: String,
+        shuffle_round_deadline: Duration,
+        min_room_size: usize,
+    ) -> Self {
         Self {
+            shuffle_round_deadline,
+            min_room_size,
             inner: Core::new(
                 storage.clone(),
-                SimpleWaiter::new(MIN_ROOM_SIZE, storage.clone()),
+                SimpleWaiter::new(min_room_size, storage.clone()),
                 contract.clone(),
             ),
             utxo_contract: contract,
@@ -60,12 +71,6 @@ where
         }
     }
 }
-
-<<<<<<< HEAD
-pub const MIN_ROOM_SIZE: usize = 3; // TODO: Move to config
-=======
-pub const MIN_ROOM_SIZE: usize = 4; // TODO: Move to config
->>>>>>> develop
 
 #[tonic::async_trait]
 impl<S, C> ShuffleService for Service<S, C>
@@ -120,7 +125,7 @@ where
                 tonic::Status::internal("internal error")
             })?;
 
-        if queue_length >= MIN_ROOM_SIZE {
+        if queue_length >= self.min_room_size {
             self.inner
                 .create_rooms(&utxo.token, &utxo.amount)
                 .await
@@ -212,7 +217,7 @@ where
             tonic::Status::internal("internal error")
         })?;
 
-        let (event_sender, event_receiver) = tokio::sync::mpsc::channel(10);
+        let (event_sender, event_receiver) = channel(10);
 
         let rsa_public_key_raw = request.into_inner().public_key.ok_or_else(|| {
             log::debug!("public key is missing, utxo_id: {}", claims.utxo_id);
@@ -328,11 +333,14 @@ where
             let (internal_events_sender, internal_events_receiver) = channel(10);
             let mut room = RoomConnection::new(
                 internal_events_receiver,
-                interval_at(Instant::now() + ROUND_DEADLINE, ROUND_DEADLINE),
                 room_id,
                 self.inner.clone(),
                 self.tokens_generator.clone(),
             );
+            room.set_deadline(interval_at(
+                Instant::now() + self.shuffle_round_deadline,
+                self.shuffle_round_deadline,
+            ));
 
             tokio::spawn(async move {
                 room.run().await;

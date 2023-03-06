@@ -1,27 +1,24 @@
+use crate::service::auth::TokensGenerator;
 use coin_shuffle_contracts_bindings::utxo::Contract;
-use coin_shuffle_core::service::storage::{participants, Storage};
-use coin_shuffle_core::service::types::{EncodedOutput, ShuffleRound};
+use coin_shuffle_core::service::storage::Storage;
+use coin_shuffle_core::service::types::EncodedOutput;
 use coin_shuffle_core::service::waiter::simple::SimpleWaiter;
 use coin_shuffle_core::service::Service as Core;
-use coin_shuffle_core::types::Output;
 use coin_shuffle_protos::v1::shuffle_event::Body;
 use coin_shuffle_protos::v1::{
     EncodedOutputs, RsaPublicKey as ProtosRsaPublicKey, ShuffleTxHash, TxSigningOutputs,
 };
-use std::collections::HashMap;
-
-use crate::service::auth::TokensGenerator;
-use crate::service::MIN_ROOM_SIZE;
 use coin_shuffle_protos::v1::{ShuffleEvent, ShuffleInfo};
 use ethers_core::abi::ethereum_types::Signature;
 use ethers_core::types::U256;
 use eyre::{Context, Result};
 use rsa::{PublicKeyParts, RsaPublicKey};
+use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver as StreamReceiver, Sender as StreamSender};
-use tokio::time::{Duration, Interval};
+use tokio::time::{interval_at, Duration, Instant, Interval};
 use uuid::Uuid;
 
-pub const ROUND_DEADLINE: Duration = Duration::from_secs(2 * 60); // TODO: Move to config
+pub const DEFAULT_ROUND_DEADLINE: Duration = Duration::from_secs(2 * 60);
 
 #[derive(Debug, Clone)]
 pub enum RoomEvents {
@@ -42,6 +39,7 @@ where
     C: Contract + Clone,
 {
     room_id: Uuid,
+    room_size: usize,
     deadline: Interval,
     events: StreamReceiver<RoomEvents>,
     participant_streams: HashMap<U256, StreamSender<Result<ShuffleEvent, tonic::Status>>>,
@@ -56,19 +54,27 @@ where
 {
     pub fn new(
         events: StreamReceiver<RoomEvents>,
-        deadline: Interval,
         room_id: Uuid,
         core: Core<S, SimpleWaiter<S>, C>,
         token_generator: TokensGenerator,
     ) -> Self {
         Self {
-            deadline,
+            deadline: interval_at(
+                Instant::now() + DEFAULT_ROUND_DEADLINE,
+                DEFAULT_ROUND_DEADLINE,
+            ),
             events,
             participant_streams: HashMap::new(),
             room_id,
             core,
             token_generator,
+            room_size: usize::default(),
         }
+    }
+
+    pub fn set_deadline(&mut self, deadline: Interval) -> &mut RoomConnection<S, C> {
+        self.deadline = deadline;
+        self
     }
 
     pub async fn run(&mut self) {
@@ -133,7 +139,7 @@ where
                 "failed to add participant public key, utxo id: {utxo_id}"
             ))?;
 
-        if self.participant_streams.len() == MIN_ROOM_SIZE {
+        if self.participant_streams.len() == self.room_size {
             self.send_encoded_outputs(
                 &self
                     .distribute_public_keys()
@@ -148,6 +154,8 @@ where
             self.room_id,
             utxo_id
         );
+
+        self.room_size += 1;
 
         Ok(())
     }
@@ -205,8 +213,6 @@ where
             .is_signature_passed(&self.room_id)
             .await
             .context("failed to check is all signature have passed")?;
-
-        let room = self.core.get_room(&self.room_id).await?;
 
         if is_signature_passed {
             let tx_hash = self

@@ -1,7 +1,6 @@
 use coin_shuffle_contracts_bindings::utxo;
 use coin_shuffle_protos::v1::shuffle_service_server::ShuffleServiceServer;
 use ethers_core::utils::hex::ToHex;
-use ethers_signers::LocalWallet;
 use eyre::Context;
 use simplelog::{ColorChoice, Config, TermLogger, TerminalMode};
 use tonic::transport::Server;
@@ -19,7 +18,13 @@ pub(super) async fn run_service(cfg: Cfg) -> eyre::Result<()> {
     .await
     .context("failed to init contract connector")?;
 
-    let service = Service::new(contract, db, "some_key".to_string());
+    let service = Service::new(
+        contract,
+        db,
+        "some_key".to_string(),
+        cfg.service.shuffle_round_deadline,
+        cfg.service.min_room_size,
+    );
 
     TermLogger::init(
         cfg.logger.level,
