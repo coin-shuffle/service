@@ -1,13 +1,11 @@
 #[derive(serde::Deserialize)]
 pub(super) struct Raw {
-    in_memory: bool,
-    url: Option<String>,
+    sign_key: String,
 }
 
 #[derive(Default)]
 pub struct Config {
-    pub in_memory: bool,
-    pub url: Option<String>,
+    pub sign_key: String,
 }
 
 impl TryFrom<Raw> for Config {
@@ -15,8 +13,7 @@ impl TryFrom<Raw> for Config {
 
     fn try_from(raw: Raw) -> Result<Self, Self::Error> {
         Ok(Self {
-            in_memory: raw.in_memory,
-            url: raw.url,
+            sign_key: raw.sign_key,
         })
     }
 }

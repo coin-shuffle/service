@@ -25,8 +25,6 @@ pub fn verify_join_signature(
     utxo_id.to_big_endian(&mut message[0..U256_BYTES]);
     message[U256_BYTES..MESSAGE_LEN].copy_from_slice(&timestamp.to_be_bytes());
 
-    dbg!(&signature);
-
     let signature = Signature::decode(&mut signature.deref())
         .map_err(|err| JoinSignatureError::InvalidSignature(eyre!("failed to decode: {err}")))?;
 

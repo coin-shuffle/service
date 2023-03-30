@@ -1,28 +1,28 @@
 mod contract;
-mod database;
 mod logger;
 mod service;
 mod signer;
+mod tokens;
 
 use eyre::Context;
 use std::path::PathBuf;
 
 #[derive(serde::Deserialize)]
 struct Raw {
-    database: database::Raw,
     logger: logger::Raw,
     service: service::Raw,
     contract: contract::Raw,
     signer: signer::Raw,
+    tokens: tokens::Raw,
 }
 
 #[derive(Default)]
 pub struct Config {
-    pub database: database::Config,
     pub logger: logger::Config,
     pub service: service::Config,
     pub contract: contract::Config,
     pub signer: signer::Config,
+    pub tokens: tokens::Config,
 }
 
 impl TryFrom<Raw> for Config {
@@ -30,11 +30,11 @@ impl TryFrom<Raw> for Config {
 
     fn try_from(raw: Raw) -> Result<Self, Self::Error> {
         Ok(Self {
-            database: raw.database.try_into()?,
             logger: raw.logger.try_into()?,
             service: raw.service.try_into()?,
             contract: raw.contract.try_into()?,
             signer: raw.signer.try_into()?,
+            tokens: raw.tokens.try_into()?,
         })
     }
 }

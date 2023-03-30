@@ -1,5 +1,3 @@
-use eyre::Context;
-
 #[derive(serde::Deserialize)]
 pub(super) struct Raw {
     private_key: String,
