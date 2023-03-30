@@ -1,8 +1,8 @@
 mod auth;
 mod room;
 
-use coin_shuffle_contracts_bindings::utxo::Contract;
-use coin_shuffle_core::service::{storage::Storage, waiter::simple::SimpleWaiter, Service as Core};
+use coin_shuffle_contracts_bindings::utxo::{self, Contract};
+use coin_shuffle_core::service::Service;
 use coin_shuffle_protos::v1::{
     shuffle_service_server::ShuffleService, ConnectShuffleRoomRequest, IsReadyForShuffleRequest,
     IsReadyForShuffleResponse, JoinShuffleRoomRequest, JoinShuffleRoomResponse, ShuffleEvent,
@@ -10,6 +10,9 @@ use coin_shuffle_protos::v1::{
 };
 use ethers_core::abi::ethereum_types::Signature;
 use ethers_core::types::U256;
+use ethers_middleware::SignerMiddleware;
+use ethers_providers::{Http, Provider};
+use ethers_signers::LocalWallet;
 use rsa::{BigUint, RsaPublicKey};
 use std::collections::hash_map::Entry::Vacant;
 use std::time::Duration;
@@ -21,51 +24,38 @@ use tokio::time::{interval_at, Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
+use crate::waiter::Waiter;
+
 use self::{
     auth::{verify_join_signature, TokensGenerator},
-    room::{RoomConnection, RoomEvents},
+    room::{RoomConnectionManager, RoomEvents},
 };
 
 // TODO: Separate requests data parsing level
 
-pub struct Service<S, C>
-where
-    S: Storage + Clone,
-    C: Contract + Clone,
-{
-    inner: Core<S, SimpleWaiter<S>, C>,
-    utxo_contract: C,
-    storage: S,
+pub struct Protocol {
+    service: Service,
+    utxo_contract: utxo::Connector<SignerMiddleware<Provider<Http>, LocalWallet>>,
     tokens_generator: TokensGenerator,
 
     shuffle_round_deadline: Duration,
-    min_room_size: usize,
 
+    waiter: Waiter,
     rooms: Arc<Mutex<HashMap<Uuid, StreamSender<RoomEvents>>>>,
 }
 
-impl<S, C> Service<S, C>
-where
-    S: Storage,
-    C: Contract + Clone,
-{
+impl Protocol {
     pub fn new(
-        contract: C,
-        storage: S,
+        contract: utxo::Connector<SignerMiddleware<Provider<Http>, LocalWallet>>,
         token_key: String,
         shuffle_round_deadline: Duration,
         min_room_size: usize,
     ) -> Self {
         Self {
             shuffle_round_deadline,
-            min_room_size,
-            inner: Core::new(
-                storage.clone(),
-                SimpleWaiter::new(min_room_size, storage.clone()),
-                contract.clone(),
-            ),
+            waiter: Waiter::new(min_room_size),
+            service: Service::new(),
             utxo_contract: contract,
-            storage,
             tokens_generator: TokensGenerator::new(token_key),
             rooms: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -73,17 +63,11 @@ where
 }
 
 #[tonic::async_trait]
-impl<S, C> ShuffleService for Service<S, C>
-where
-    S: Storage + Clone + 'static,
-    C: Contract + Send + Sync + Clone + 'static,
-{
+impl ShuffleService for Protocol {
     async fn join_shuffle_room(
         &self,
         request: tonic::Request<JoinShuffleRoomRequest>,
     ) -> Result<tonic::Response<JoinShuffleRoomResponse>, tonic::Status> {
-        dbg!(&request);
-
         let request = request.into_inner();
 
         let utxo_id = U256::from_big_endian(&request.utxo_id);
@@ -108,32 +92,15 @@ where
             },
         )?;
 
-        self.inner
-            .add_participant(&utxo.token, &utxo.amount, &utxo.id)
+        if let Some(participants) = self
+            .waiter
+            .add_participant(utxo.token, utxo.amount, utxo.id)
             .await
-            .map_err(|err| {
-                log::error!("failed to add participant: {err}");
-                tonic::Status::internal("internal error")
-            })?;
-
-        let queue_length = self
-            .storage
-            .queue_len(&utxo.token, &utxo.amount)
-            .await
-            .map_err(|err| {
-                log::error!("failed to get queue length: {err}");
-                tonic::Status::internal("internal error")
-            })?;
-
-        if queue_length >= self.min_room_size {
-            self.inner
-                .create_rooms(&utxo.token, &utxo.amount)
-                .await
-                .map_err(|err| {
-                    log::error!("failed to start shuffle: {err}");
-                    tonic::Status::internal("internal error")
-                })?;
-        }
+        {
+            self.service
+                .create_room(utxo.token, utxo.amount, participants)
+                .await;
+        };
 
         Ok(tonic::Response::new(JoinShuffleRoomResponse {
             room_access_token: self
@@ -158,16 +125,7 @@ where
                 tonic::Status::unauthenticated("invalid token")
             })?;
 
-        let is_room_ready = self
-            .inner
-            .get_participant(&claims.utxo_id)
-            .await
-            .map_err(|err| {
-                log::error!("failed to get participant: {err}");
-                tonic::Status::unauthenticated("no participant with such id")
-            })?
-            .room_id
-            .is_some();
+        let participant = self.service.get_participant(&claims.utxo_id).await;
 
         let new_token = self
             .tokens_generator
@@ -179,7 +137,7 @@ where
 
         // if participant is not in the room, it means that the shuffle is not started yet
         Ok(tonic::Response::new(IsReadyForShuffleResponse {
-            ready: is_room_ready,
+            ready: participant.is_some(), // participant is created when room is created
             room_access_token: new_token,
         }))
     }
@@ -199,18 +157,15 @@ where
             })?;
 
         let participant = self
-            .inner
+            .service
             .get_participant(&claims.utxo_id)
             .await
-            .map_err(|err| {
-                log::error!("failed to get participant: {err}");
-                tonic::Status::internal("internal error")
+            .ok_or_else(|| {
+                log::debug!("participant is absent, utxo_id: {}", claims.utxo_id);
+                tonic::Status::not_found("participant is absent")
             })?;
 
-        let room_id = participant.room_id.ok_or_else(|| {
-            log::debug!("room is absent");
-            tonic::Status::not_found("room is absent")
-        })?;
+        let room_id = participant.room_id;
 
         let room_stream = self.get_room_stream(room_id).await.ok_or_else(|| {
             log::error!("failed to find the room with id: {}", room_id);
@@ -234,11 +189,11 @@ where
         })?;
 
         room_stream
-            .send(RoomEvents::AddParticipant((
-                participant.utxo_id,
-                event_sender,
-                rsa_public_key,
-            )))
+            .send(RoomEvents::AddParticipant {
+                utxo_id: participant.utxo_id,
+                stream: event_sender,
+                key: rsa_public_key,
+            })
             .await
             .map_err(|err| {
                 log::error!(
@@ -322,21 +277,18 @@ where
     }
 }
 
-impl<S, C> Service<S, C>
-where
-    S: Storage + Clone + 'static,
-    C: Contract + Send + Sync + Clone + 'static,
-{
+impl Protocol {
     async fn get_room_stream(&self, room_id: Uuid) -> Option<StreamSender<RoomEvents>> {
-        let mut rooms_lock = self.rooms.lock().await;
-        if let Vacant(e) = rooms_lock.entry(room_id) {
+        let mut rooms = self.rooms.lock().await;
+
+        if let Vacant(e) = rooms.entry(room_id) {
             let (internal_events_sender, internal_events_receiver) = channel(10);
-            let mut room = RoomConnection::new(
+            let mut room = RoomConnectionManager::new(
                 internal_events_receiver,
-                room_id,
-                self.inner.clone(),
+                self.service.get_room(&room_id).await?, // TODO: check if this behaviour is valid
+                self.service.clone(),
                 self.tokens_generator.clone(),
-                self.min_room_size,
+                self.utxo_contract.clone(),
             );
             room.set_deadline(interval_at(
                 Instant::now() + self.shuffle_round_deadline,
@@ -352,6 +304,6 @@ where
             return Some(internal_events_sender);
         }
 
-        rooms_lock.get(&room_id).cloned()
+        rooms.get(&room_id).cloned()
     }
 }

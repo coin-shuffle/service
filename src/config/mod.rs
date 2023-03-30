@@ -1,5 +1,4 @@
 mod contract;
-mod database;
 mod logger;
 mod service;
 mod signer;
@@ -9,7 +8,6 @@ use std::path::PathBuf;
 
 #[derive(serde::Deserialize)]
 struct Raw {
-    database: database::Raw,
     logger: logger::Raw,
     service: service::Raw,
     contract: contract::Raw,
@@ -18,7 +16,6 @@ struct Raw {
 
 #[derive(Default)]
 pub struct Config {
-    pub database: database::Config,
     pub logger: logger::Config,
     pub service: service::Config,
     pub contract: contract::Config,
@@ -30,7 +27,6 @@ impl TryFrom<Raw> for Config {
 
     fn try_from(raw: Raw) -> Result<Self, Self::Error> {
         Ok(Self {
-            database: raw.database.try_into()?,
             logger: raw.logger.try_into()?,
             service: raw.service.try_into()?,
             contract: raw.contract.try_into()?,
