@@ -18,7 +18,7 @@ pub(super) async fn run_service(cfg: Cfg) -> eyre::Result<()> {
 
     let service = Protocol::new(
         contract,
-        "some_key".to_string(),
+        cfg.tokens.sign_key,
         cfg.service.shuffle_round_deadline,
         cfg.service.min_room_size,
     );

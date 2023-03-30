@@ -2,6 +2,7 @@ mod contract;
 mod logger;
 mod service;
 mod signer;
+mod tokens;
 
 use eyre::Context;
 use std::path::PathBuf;
@@ -12,6 +13,7 @@ struct Raw {
     service: service::Raw,
     contract: contract::Raw,
     signer: signer::Raw,
+    tokens: tokens::Raw,
 }
 
 #[derive(Default)]
@@ -20,6 +22,7 @@ pub struct Config {
     pub service: service::Config,
     pub contract: contract::Config,
     pub signer: signer::Config,
+    pub tokens: tokens::Config,
 }
 
 impl TryFrom<Raw> for Config {
@@ -31,6 +34,7 @@ impl TryFrom<Raw> for Config {
             service: raw.service.try_into()?,
             contract: raw.contract.try_into()?,
             signer: raw.signer.try_into()?,
+            tokens: raw.tokens.try_into()?,
         })
     }
 }

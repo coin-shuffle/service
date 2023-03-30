@@ -11,4 +11,7 @@ url     = "https://goerli.blockpi.network/v1/rpc/public"
 address = "0x4C0d116d9d028E60904DCA468b9Fa7537Ef8Cd5f"
 
 [signer]
-private-key = ""
+private_key = ""
+
+[tokens]
+sign_key = "some-long-sign-key"
