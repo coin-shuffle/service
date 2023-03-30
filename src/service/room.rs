@@ -86,7 +86,7 @@ impl RoomConnectionManager {
 
                     match self.handle_event(event.clone()).await {
                         Err(err) => {
-                            log::error!(target: "room", "room_id={} {err}", self.room.id);
+                            log::error!(target: "room", "room_id={} {err:?}", self.room.id);
                             for (_, stream) in self.participant_streams.iter_mut() {
                                 let _ = stream.send(Ok(ShuffleEvent {
                                     body: Some(Body::Error(ShuffleError {
@@ -119,7 +119,9 @@ impl RoomConnectionManager {
                 self.event_shuffle_round(utxo_id, decoded_outputs).await?
             }
             RoomEvents::SignedOutput((utxo_id, signature)) => {
-                self.event_signed_output(utxo_id, signature).await?
+                self.event_signed_output(utxo_id, signature)
+                    .await
+                    .context("Failed to handle signed output")?;
             }
         }
 
@@ -141,7 +143,7 @@ impl RoomConnectionManager {
         self.participant_streams.insert(utxo_id, stream);
 
         let Some(distributed_keys) = self.service
-            .connect_participant(&self.room.id, &utxo_id, public_key)
+            .connect_participant(&utxo_id, public_key)
             .await
             .context(format!(
                 "failed to add participant public key, utxo id: {utxo_id}"
@@ -206,7 +208,7 @@ impl RoomConnectionManager {
         let Some((outputs, inputs)) = self.service
             .pass_signature(&self.room.id, &utxo_id, signature)
             .await
-            .context("failed to save output signature")? else {
+            .context("Failed to save output signature")? else {
                 return Ok(()) // That means that still not all participants have signed outputs;
             };
 

@@ -97,9 +97,12 @@ impl ShuffleService for Protocol {
             .add_participant(utxo.token, utxo.amount, utxo.id)
             .await
         {
-            self.service
+            let room = self
+                .service
                 .create_room(utxo.token, utxo.amount, participants)
                 .await;
+
+            log::debug!("room created: {room:?}");
         };
 
         Ok(tonic::Response::new(JoinShuffleRoomResponse {
