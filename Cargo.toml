@@ -28,16 +28,16 @@ ethers-providers  = { version = "2" }
 
 [dependencies.coin-shuffle-protos]
 git              = "ssh://git@github.com/coin-shuffle/protos.git"
-branch           = "develop"
+tag              = "v0.1.0-alpha"
 default-features = false
 features         = ["server", "transport"]
 
 [dependencies.coin-shuffle-contracts-bindings]
 git    = "ssh://git@github.com/coin-shuffle/contracts-bindings.git"
-branch = "develop"
+tag    = "v0.1.0-alpha"
 
 [dependencies.coin-shuffle-core]
 git              = "ssh://git@github.com/coin-shuffle/core.git"
-branch           = "refactoring"
+tag              = "v0.1.0-alpha"
 default-features = false
 features         = ["service", "serde"]
