@@ -557,7 +557,7 @@ checksum = "8a2dd5a6fe8c6e3502f568a6353e5273bbb15193ad9a89e457b9970798efbea1"
 [[package]]
 name = "coin-shuffle-contracts-bindings"
 version = "0.1.0"
-source = "git+ssh://git@github.com/coin-shuffle/contracts-bindings.git?branch=develop#0184d8d166712eecfc4e5d1cd8bb1e79ffff4538"
+source = "git+ssh://git@github.com/coin-shuffle/contracts-bindings.git?tag=v0.1.0-alpha#f7a2adec2981da553000850bb66552bfeeb5a529"
 dependencies = [
  "async-trait",
  "ethers-contract",
@@ -577,7 +577,7 @@ dependencies = [
 [[package]]
 name = "coin-shuffle-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/coin-shuffle/core.git?branch=refactoring#13abe3955a216e2fbff251e1d9b69b541c85aa83"
+source = "git+ssh://git@github.com/coin-shuffle/core.git?tag=v0.1.0-alpha#10cdf81f4c5fcb7906d5216fba37f915b5f47ccc"
 dependencies = [
  "async-trait",
  "coin-shuffle-contracts-bindings",
@@ -595,7 +595,7 @@ dependencies = [
 [[package]]
 name = "coin-shuffle-protos"
 version = "0.1.0"
-source = "git+ssh://git@github.com/coin-shuffle/protos.git?branch=develop#252d3b0a56d47064d69dc9258eaab50133fa5532"
+source = "git+ssh://git@github.com/coin-shuffle/protos.git?tag=v0.1.0-alpha#c9a22f35e1de91e5e225d97c61baa7266890edb4"
 dependencies = [
  "eyre",
  "prost",
